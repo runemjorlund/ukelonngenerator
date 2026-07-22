@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oppdragsklubben-v2'
+const CACHE_NAME = 'oppdragsklubben-v3'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png']
 
 self.addEventListener('install', (event) => {
