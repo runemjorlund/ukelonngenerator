@@ -1,0 +1,4 @@
+project_id = "ukelonngenerator"
+
+[functions.send-push]
+verify_jwt = false
