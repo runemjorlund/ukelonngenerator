@@ -4,7 +4,8 @@ En mobiltilpasset familieapp for husoppgaver, godkjenning og ukepenger. Appen er
 
 ## Dette støttes
 
-- Voksne logger inn med en e-postlenke
+- Voksne logger inn med en engangskode fra e-post
+- Innloggingen opprettes i den installerte appen og kan lagres på iPhone og iPad
 - Barn kobler sin enhet til en barneprofil med en engangslenke
 - Familiens data synkroniseres mellom enheter i sanntid
 - Barn kan sende inn utførte oppgaver, men ikke godkjenne eller endre beløp
@@ -27,11 +28,11 @@ Miljøvariablene er beskrevet i `.env.example`.
 ## Gjør Vercel-versjonen klar
 
 1. Opprett et Supabase-prosjekt.
-2. Følg [Supabase-oppsettet](supabase/README.md) for migrasjon, anonym barneinnlogging, Edge Function, VAPID-nøkler og Cron.
+2. Følg [Supabase-oppsettet](supabase/README.md) for database, anonym barneinnlogging, e-postmal, Edge Function, VAPID-nøkler og Cron.
 3. Legg `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` og `VITE_VAPID_PUBLIC_KEY` inn i Vercel.
 4. Kjør en ny Vercel-deploy.
 5. Logg inn som voksen, opprett familien og lag én invitasjonslenke per barn.
-6. Åpne hvert barns lenke på barnets egen enhet. På iPhone/iPad: legg appen til på Hjem-skjermen.
+6. På barnets iPhone eller iPad: legg appen til på Hjem-skjermen, kopier invitasjonslenken, åpne den installerte appen og velg **Jeg har en invitasjonslenke**.
 
 ## Sikkerhetsmodell
 
