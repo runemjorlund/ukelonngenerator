@@ -62,7 +62,13 @@ type Submission = {
 }
 
 const WEEKDAYS = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag']
-const EMOJIS = ['🦊', '🐙', '🐼', '🦁', '🐬', '🦄', '🚀', '🎨', '⚽', '🎧', '🌟', '🛹']
+const CHILD_EMOJIS = ['🦊', '🐙', '🐼', '🦁', '🐬', '🦄', '🚀', '🎨', '⚽', '🎧', '🌟', '🛹']
+const TASK_EMOJIS = [
+  '✨', '🧹', '🧽', '🧺', '🛏️', '🍽️',
+  '🗑️', '📚', '🐕', '🌱', '🚿', '🚲',
+  '🧸', '🧼', '🍳', '🥣', '🧤', '🪣',
+  '🛒', '🧑‍🍳',
+]
 
 const formatMoney = (ore: number) => new Intl.NumberFormat('nb-NO', {
   style: 'currency',
@@ -483,7 +489,7 @@ function ParentDashboard({ family, member, members, tasks, submissions, refresh,
       <div className="two-column">
         <Section title="Oppgaver" eyebrow="Administrer">
           <form className="compact-form" onSubmit={addTask}>
-            <div className="form-row"><select value={taskEmoji} onChange={(event) => setTaskEmoji(event.target.value)}>{EMOJIS.map((emoji) => <option key={emoji}>{emoji}</option>)}</select><input required placeholder="Navn på oppgaven" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} /><input className="amount-input" required inputMode="decimal" aria-label="Beløp i kroner" value={taskAmount} onChange={(event) => setTaskAmount(event.target.value)} /></div>
+            <div className="form-row"><select value={taskEmoji} onChange={(event) => setTaskEmoji(event.target.value)}>{TASK_EMOJIS.map((emoji) => <option key={emoji}>{emoji}</option>)}</select><input required placeholder="Navn på oppgaven" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} /><input className="amount-input" required inputMode="decimal" aria-label="Beløp i kroner" value={taskAmount} onChange={(event) => setTaskAmount(event.target.value)} /></div>
             <input placeholder="Kort beskrivelse" value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} />
             <button className="primary-button"><Plus size={17} /> Legg til oppgave</button>
           </form>
@@ -492,7 +498,7 @@ function ParentDashboard({ family, member, members, tasks, submissions, refresh,
 
         <Section title="Inviter et barn" eyebrow="Én trygg lenke per enhet">
           <form className="compact-form" onSubmit={createInvite}>
-            <div className="form-row"><select value={childEmoji} onChange={(event) => setChildEmoji(event.target.value)}>{EMOJIS.map((emoji) => <option key={emoji}>{emoji}</option>)}</select><input required placeholder="Barnets navn" value={childName} onChange={(event) => setChildName(event.target.value)} /></div>
+            <div className="form-row"><select value={childEmoji} onChange={(event) => setChildEmoji(event.target.value)}>{CHILD_EMOJIS.map((emoji) => <option key={emoji}>{emoji}</option>)}</select><input required placeholder="Barnets navn" value={childName} onChange={(event) => setChildName(event.target.value)} /></div>
             <button className="primary-button"><Plus size={17} /> Lag invitasjonslenke</button>
           </form>
           {inviteUrl && <div className="invite-box"><p>Åpne denne lenken på barnets telefon eller nettbrett. Den virker bare én gang.</p><div><input readOnly value={inviteUrl} /><button className="icon-button" onClick={() => void copyInvite()}><Copy size={18} /></button></div></div>}
