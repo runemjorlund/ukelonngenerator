@@ -13,7 +13,7 @@ function urlBase64ToUint8Array(value: string): Uint8Array<ArrayBuffer> {
   return bytes
 }
 
-export async function subscribeToPush(familyId: string, memberId: string) {
+export async function subscribeToPush() {
   const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim()
   if (!vapidPublicKey) throw new Error('VAPID-nøkkelen mangler i Vercel.')
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -36,15 +36,12 @@ export async function subscribeToPush(familyId: string, memberId: string) {
   }
 
   const client = getSupabase()
-  const { error } = await client.from('push_subscriptions').upsert({
-    family_id: familyId,
-    member_id: memberId,
-    endpoint: json.endpoint,
-    p256dh: json.keys.p256dh,
-    auth: json.keys.auth,
-    user_agent: navigator.userAgent,
-  }, { onConflict: 'endpoint' })
-
+  const { error } = await client.rpc('save_push_subscription', {
+    p_endpoint: json.endpoint,
+    p_p256dh: json.keys.p256dh,
+    p_auth: json.keys.auth,
+    p_user_agent: navigator.userAgent,
+  })
   if (error) throw error
 
   const { error: testError } = await client.functions.invoke('send-push', {

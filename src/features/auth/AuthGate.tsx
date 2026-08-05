@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { ShieldCheck, Sparkles } from 'lucide-react'
-import { getSupabase, isSupabaseConfigured } from './lib/supabase'
+import {
+  claimInviteToken,
+  getCurrentSession,
+  sendEmailCode,
+  signInAnonymously,
+  signOutLocal,
+  subscribeToAuth,
+  verifyEmailCode,
+} from '../../data/auth'
+import { errorMessage } from '../../lib/format'
+import { isSupabaseConfigured } from '../../lib/supabase'
+import { AuthCard } from './AuthCard'
 
 type AuthMode = 'email' | 'email-code' | 'invite'
 
-const errorMessage = (error: unknown) => error instanceof Error
-  ? error.message
-  : 'Noe gikk galt. Prøv igjen.'
+const PENDING_INVITE_KEY = 'oppdragsklubben.pending-invite'
 
 const persistStorage = async () => {
   try {
@@ -37,29 +45,13 @@ const extractInviteToken = (value: string) => {
   }
 }
 
-function AuthCard({ title, text, notice, children }: {
-  title: string
-  text: string
-  notice: string
-  children: ReactNode
-}) {
+function LoadingGate() {
   return (
-    <main className="auth-page">
-      <section className="auth-card">
-        <div className="auth-logo"><Sparkles size={27} /></div>
-        <span className="eyebrow">Oppdragsklubben</span>
-        <h1>{title}</h1>
-        <p>{text}</p>
-        {children}
-        {notice && <p className="inline-notice" role="status">{notice}</p>}
-        <p className="privacy-note"><ShieldCheck size={18} /> Familiens oppgaver og beløp er private og beskyttet i databasen.</p>
-      </section>
+    <main className="loading-screen">
+      <div className="spinner" />
+      <strong>Kontrollerer innloggingen…</strong>
     </main>
   )
-}
-
-function LoadingGate() {
-  return <main className="loading-screen"><div className="spinner" /><strong>Kontrollerer innloggingen…</strong></main>
 }
 
 export default function AuthGate({ children }: { children: ReactNode }) {
@@ -69,18 +61,30 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState('')
   const [emailCode, setEmailCode] = useState('')
   const [inviteValue, setInviteValue] = useState('')
+  const [pendingInviteToken, setPendingInviteToken] = useState(
+    () => window.sessionStorage.getItem(PENDING_INVITE_KEY) ?? '',
+  )
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const claimingInvite = useRef(false)
 
+  const rememberPendingInvite = (token: string) => {
+    setPendingInviteToken(token)
+    window.sessionStorage.setItem(PENDING_INVITE_KEY, token)
+  }
+
+  const clearPendingInvite = () => {
+    setPendingInviteToken('')
+    window.sessionStorage.removeItem(PENDING_INVITE_KEY)
+  }
+
   useEffect(() => {
     if (!isSupabaseConfigured) return
 
-    const client = getSupabase()
     let active = true
 
     void (async () => {
-      let currentSession = (await client.auth.getSession()).data.session
+      let currentSession = await getCurrentSession()
       const inviteToken = new URLSearchParams(window.location.search).get('invite')?.trim()
 
       if (inviteToken) {
@@ -88,35 +92,31 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         let createdAnonymousSession = false
 
         try {
-          if (currentSession && !currentSession.user.is_anonymous) {
-            throw new Error('Logg ut av voksenkontoen før du bruker en barneinvitasjon.')
-          }
-
           if (!currentSession) {
-            const { data, error } = await client.auth.signInAnonymously()
-            if (error) throw error
-            currentSession = data.session
-            createdAnonymousSession = true
+            currentSession = await signInAnonymously()
+            createdAnonymousSession = Boolean(currentSession)
           }
+          if (!currentSession) throw new Error('Kunne ikke opprette en sikker innlogging.')
 
-          if (!currentSession) throw new Error('Kunne ikke opprette en sikker barneinnlogging.')
-
-          const { error } = await client.rpc('claim_child_invite', { p_token: inviteToken })
-          if (error) throw error
-
+          await claimInviteToken(inviteToken)
           await persistStorage()
+          clearPendingInvite()
           window.history.replaceState({}, '', window.location.pathname)
-          setNotice('Denne enheten er koblet til barneprofilen.')
+          setNotice('Denne enheten er koblet til profilen.')
         } catch (error) {
           if (createdAnonymousSession) {
-            await client.auth.signOut({ scope: 'local' })
+            await signOutLocal()
             currentSession = null
           }
+          rememberPendingInvite(inviteToken)
           const failedInviteUrl = window.location.href
           window.history.replaceState({}, '', window.location.pathname)
           setInviteValue(failedInviteUrl)
           setMode('invite')
-          setNotice(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)
+          setNotice(
+            `Invitasjonen kunne ikke brukes anonymt: ${errorMessage(error)} `
+            + 'Er dette en vokseninvitasjon, må du logge inn med e-post først.',
+          )
         } finally {
           claimingInvite.current = false
         }
@@ -125,45 +125,49 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       if (!active) return
       setSession(currentSession)
       setReady(true)
-    })()
-
-    const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
+    })().catch((error) => {
       if (!active) return
-      if (claimingInvite.current && nextSession?.user.is_anonymous) return
+      setNotice(errorMessage(error))
+      setReady(true)
+    })
+
+    const unsubscribe = subscribeToAuth((nextSession) => {
+      if (!active) return
+      if (claimingInvite.current) return
       setSession(nextSession)
       setReady(true)
     })
 
     return () => {
       active = false
-      data.subscription.unsubscribe()
+      unsubscribe()
     }
   }, [])
 
-  const sendEmailCode = async (event: FormEvent) => {
+  const submitEmail = async (event: FormEvent) => {
     event.preventDefault()
     const normalizedEmail = email.trim().toLowerCase()
     if (!normalizedEmail) return
 
     setBusy(true)
-    const { error } = await getSupabase().auth.signInWithOtp({
-      email: normalizedEmail,
-      options: { emailRedirectTo: window.location.origin },
-    })
-    setBusy(false)
-
-    if (error) {
-      setNotice(error.message)
-      return
+    try {
+      await sendEmailCode(normalizedEmail)
+      setEmail(normalizedEmail)
+      setEmailCode('')
+      setMode('email-code')
+      setNotice(
+        pendingInviteToken
+          ? 'Sjekk e-posten. Etter innlogging kobles voksenprofilen til familien.'
+          : 'Sjekk e-posten din og skriv inn innloggingskoden.',
+      )
+    } catch (error) {
+      setNotice(errorMessage(error))
+    } finally {
+      setBusy(false)
     }
-
-    setEmail(normalizedEmail)
-    setEmailCode('')
-    setMode('email-code')
-    setNotice('Sjekk e-posten din og skriv inn innloggingskoden.')
   }
 
-  const verifyEmailCode = async (event: FormEvent) => {
+  const verifyCode = async (event: FormEvent) => {
     event.preventDefault()
     const token = emailCode.replace(/\D/g, '')
     if (token.length < 6 || token.length > 10) {
@@ -172,21 +176,34 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     }
 
     setBusy(true)
-    const { data, error } = await getSupabase().auth.verifyOtp({
-      email: email.trim().toLowerCase(),
-      token,
-      type: 'email',
-    })
-    setBusy(false)
+    claimingInvite.current = Boolean(pendingInviteToken)
+    try {
+      const nextSession = await verifyEmailCode(email.trim().toLowerCase(), token)
+      if (!nextSession) throw new Error('Innloggingen ga ingen gyldig økt.')
 
-    if (error) {
-      setNotice(error.message)
-      return
+      if (pendingInviteToken) {
+        try {
+          await claimInviteToken(pendingInviteToken)
+          clearPendingInvite()
+          setNotice('Voksenprofilen er koblet til familien.')
+        } catch (error) {
+          await signOutLocal()
+          setInviteValue(pendingInviteToken)
+          setMode('invite')
+          throw new Error(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)
+        }
+      } else {
+        setNotice('Du er logget inn på denne enheten.')
+      }
+
+      await persistStorage()
+      setSession(nextSession)
+    } catch (error) {
+      setNotice(errorMessage(error))
+    } finally {
+      claimingInvite.current = false
+      setBusy(false)
     }
-
-    await persistStorage()
-    setSession(data.session)
-    setNotice('Du er logget inn på denne enheten.')
   }
 
   const claimInvite = async (event: FormEvent) => {
@@ -197,40 +214,46 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       return
     }
 
-    const client = getSupabase()
     setBusy(true)
     claimingInvite.current = true
     let createdAnonymousSession = false
 
     try {
-      let currentSession = (await client.auth.getSession()).data.session
-      if (currentSession && !currentSession.user.is_anonymous) {
-        throw new Error('Logg ut av voksenkontoen før du bruker en barneinvitasjon.')
-      }
-
+      let currentSession = await getCurrentSession()
       if (!currentSession) {
-        const { data, error } = await client.auth.signInAnonymously()
-        if (error) throw error
-        currentSession = data.session
-        createdAnonymousSession = true
+        currentSession = await signInAnonymously()
+        createdAnonymousSession = Boolean(currentSession)
       }
+      if (!currentSession) throw new Error('Kunne ikke opprette en sikker innlogging.')
 
-      if (!currentSession) throw new Error('Kunne ikke opprette en sikker barneinnlogging.')
-
-      const { error } = await client.rpc('claim_child_invite', { p_token: token })
-      if (error) throw error
-
+      await claimInviteToken(token)
       await persistStorage()
+      clearPendingInvite()
       window.history.replaceState({}, '', window.location.pathname)
       setSession(currentSession)
-      setNotice('Denne enheten er koblet til barneprofilen.')
+      setNotice('Denne enheten er koblet til profilen.')
     } catch (error) {
-      if (createdAnonymousSession) await client.auth.signOut({ scope: 'local' })
-      setNotice(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)
+      if (createdAnonymousSession) await signOutLocal()
+      rememberPendingInvite(token)
+      setNotice(
+        `Invitasjonen kunne ikke brukes anonymt: ${errorMessage(error)} `
+        + 'Voksne må velge vokseninnlogging og bruke sin egen e-post.',
+      )
     } finally {
       claimingInvite.current = false
       setBusy(false)
     }
+  }
+
+  const prepareAdultInvite = () => {
+    const token = extractInviteToken(inviteValue)
+    if (!token) {
+      setNotice('Lim inn vokseninvitasjonen først.')
+      return
+    }
+    rememberPendingInvite(token)
+    setMode('email')
+    setNotice('Logg inn med din egen e-post. Invitasjonen brukes etter at koden er godkjent.')
   }
 
   if (!isSupabaseConfigured || session) return children
@@ -243,7 +266,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         text={`Vi sendte koden til ${email}. Skriv den inn i appen, slik at innloggingen lagres på denne enheten.`}
         notice={notice}
       >
-        <form className="auth-form" onSubmit={verifyEmailCode}>
+        <form className="auth-form" onSubmit={verifyCode}>
           <label>
             Innloggingskode
             <input
@@ -258,7 +281,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, '').slice(0, 10))}
             />
           </label>
-          <button className="primary-button" disabled={busy}>{busy ? 'Kontrollerer…' : 'Logg inn'}</button>
+          <button className="primary-button" disabled={busy}>
+            {busy ? 'Kontrollerer…' : 'Logg inn'}
+          </button>
           <button
             type="button"
             className="secondary-button"
@@ -279,8 +304,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   if (mode === 'invite') {
     return (
       <AuthCard
-        title="Koble til barneprofil"
-        text="Installer Oppdragsklubben på Hjem-skjermen først. Kopier deretter invitasjonslenken, åpne den installerte appen og lim inn lenken her."
+        title="Koble til en profil"
+        text="Barn kan lime inn lenken og koble til direkte. En voksen må først velge vokseninnlogging, logge inn med sin egen e-post og deretter bruke invitasjonen."
         notice={notice}
       >
         <form className="auth-form" onSubmit={claimInvite}>
@@ -297,7 +322,17 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               onChange={(event) => setInviteValue(event.target.value)}
             />
           </label>
-          <button className="primary-button" disabled={busy}>{busy ? 'Kobler til…' : 'Koble til barneprofil'}</button>
+          <button className="primary-button" disabled={busy}>
+            {busy ? 'Kobler til…' : 'Koble til barneprofil'}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={busy}
+            onClick={prepareAdultInvite}
+          >
+            Jeg er voksen – logg inn først
+          </button>
           <button
             type="button"
             className="secondary-button"
@@ -305,10 +340,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             onClick={() => {
               setInviteValue('')
               setNotice('')
+              clearPendingInvite()
               setMode('email')
             }}
           >
-            Tilbake til vokseninnlogging
+            Tilbake til vanlig innlogging
           </button>
         </form>
       </AuthCard>
@@ -318,10 +354,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   return (
     <AuthCard
       title="Velkommen til Oppdragsklubben"
-      text="Voksne logger inn med en kode fra e-post. Barn bruker invitasjonslenken de får av en voksen."
+      text={pendingInviteToken
+        ? 'Logg inn med din egen e-post for å godta vokseninvitasjonen.'
+        : 'Voksne logger inn med en kode fra e-post. Barn bruker invitasjonslenken de får av en voksen.'}
       notice={notice}
     >
-      <form className="auth-form" onSubmit={sendEmailCode}>
+      <form className="auth-form" onSubmit={submitEmail}>
         <label>
           E-postadresse
           <input
@@ -332,7 +370,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             onChange={(event) => setEmail(event.target.value)}
           />
         </label>
-        <button className="primary-button" disabled={busy}>{busy ? 'Sender…' : 'Send innloggingskode'}</button>
+        <button className="primary-button" disabled={busy}>
+          {busy ? 'Sender…' : 'Send innloggingskode'}
+        </button>
         <button
           type="button"
           className="secondary-button"
