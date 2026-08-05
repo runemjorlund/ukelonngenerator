@@ -81,6 +81,7 @@ h1, h2, strong { color: var(--ink); }
 .mini-list > div, .member-list > div, .history-list > div { min-height: 58px; padding: 9px 11px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: 14px; background: white; }
 .mini-list strong, .mini-list small, .member-list strong, .member-list small { display: block; }
 .mini-list small, .member-list small { margin-top: 2px; color: var(--muted); font-size: .72rem; }
+.reconnect-button { min-height: 36px; padding-inline: 11px; font-size: .72rem; white-space: nowrap; }
 .invite-box { margin-top: 11px; background: #f8fbfd; }
 .invite-box p { color: var(--muted); font-size: .82rem; line-height: 1.45; }
 .invite-box > div { display: grid; grid-template-columns: 1fr auto; gap: 7px; }

@@ -217,7 +217,7 @@ function App() {
   }
 
   return (
-    <AppShell family={family} member={member} notice={notice} onSignOut={() => void getSupabase().auth.signOut()}>
+    <AppShell family={family} member={member} notice={notice} onSignOut={() => void getSupabase().auth.signOut({ scope: 'local' })}>
       {member.role === 'administrator' ? (
         <ParentDashboard
           family={family}
@@ -256,7 +256,7 @@ function AppShell({ family, member, notice, onSignOut, children }: {
         <div className="account">
           <span className="avatar" style={{ background: member.profile_color }}>{member.emoji}</span>
           <div><strong>{member.display_name}</strong><small>{member.role === 'administrator' ? 'Voksen' : 'Barn'}</small></div>
-          <button className="icon-button" onClick={onSignOut} aria-label="Logg ut"><LogOut size={18} /></button>
+          {member.role === 'administrator' && <button className="icon-button" onClick={onSignOut} aria-label="Logg ut"><LogOut size={18} /></button>}
         </div>
       </header>
       <main>{children}</main>
@@ -334,6 +334,7 @@ function ParentDashboard({ family, member, members, tasks, submissions, refresh,
   const [childName, setChildName] = useState('')
   const [childEmoji, setChildEmoji] = useState('🦊')
   const [inviteUrl, setInviteUrl] = useState('')
+  const [reconnectBusyId, setReconnectBusyId] = useState('')
   const [pushBusy, setPushBusy] = useState(false)
 
   const pending = submissions.filter((submission) => submission.status === 'venter')
@@ -409,6 +410,28 @@ function ParentDashboard({ family, member, members, tasks, submissions, refresh,
     onNotice('Invitasjonslenken er kopiert.')
   }
 
+  const reconnectChild = async (child: Member) => {
+    const action = child.auth_user_id ? 'koble fra den gamle enheten og lage en ny lenke' : 'lage en ny lenke'
+    if (!window.confirm(`Vil du ${action} for ${child.display_name}? Oppgavehistorikken blir beholdt.`)) return
+
+    setReconnectBusyId(child.id)
+    const { data, error } = await getSupabase().rpc('create_child_reconnect_invite', {
+      p_member_id: child.id,
+    })
+    setReconnectBusyId('')
+
+    if (error) return onNotice(error.message)
+    const result = Array.isArray(data) ? data[0] : data
+    const token = result?.invite_token as string | undefined
+    if (!token) return onNotice('Invitasjonen ble opprettet uten en gyldig lenke.')
+
+    const url = new URL(window.location.origin)
+    url.searchParams.set('invite', token)
+    setInviteUrl(url.toString())
+    onNotice(`Ny invitasjon til ${child.display_name} er klar. Den gamle enheten er koblet fra.`)
+    refresh()
+  }
+
   const updateSchedule = async (weekday: number, time: string) => {
     const { error } = await getSupabase().from('families').update({
       notification_weekday: weekday,
@@ -473,7 +496,7 @@ function ParentDashboard({ family, member, members, tasks, submissions, refresh,
             <button className="primary-button"><Plus size={17} /> Lag invitasjonslenke</button>
           </form>
           {inviteUrl && <div className="invite-box"><p>Åpne denne lenken på barnets telefon eller nettbrett. Den virker bare én gang.</p><div><input readOnly value={inviteUrl} /><button className="icon-button" onClick={() => void copyInvite()}><Copy size={18} /></button></div></div>}
-          <div className="member-list">{children.map((child) => <div key={child.id}><span className="avatar" style={{ background: child.profile_color }}>{child.emoji}</span><strong>{child.display_name}</strong><small>{child.auth_user_id ? 'Enhet koblet til' : 'Venter på invitasjon'}</small></div>)}</div>
+          <div className="member-list">{children.map((child) => <div key={child.id}><span className="avatar" style={{ background: child.profile_color }}>{child.emoji}</span><div><strong>{child.display_name}</strong><small>{child.auth_user_id ? 'Enhet koblet til' : 'Venter på invitasjon'}</small></div><button className="secondary-button reconnect-button" disabled={reconnectBusyId === child.id} onClick={() => void reconnectChild(child)}>{reconnectBusyId === child.id ? 'Lager lenke…' : child.auth_user_id ? 'Koble til på nytt' : 'Lag ny lenke'}</button></div>)}</div>
         </Section>
       </div>
 
