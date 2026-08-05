@@ -7,6 +7,7 @@ En mobiltilpasset familieapp for husoppgaver, godkjenning og ukepenger. Appen er
 - Voksne logger inn med en engangskode fra e-post
 - Innloggingen opprettes i den installerte appen og kan lagres på iPhone og iPad
 - Barn kobler sin enhet til en barneprofil med en engangslenke
+- Voksne kan koble en eksisterende barneprofil til en ny enhet uten å miste historikk
 - Familiens data synkroniseres mellom enheter i sanntid
 - Barn kan sende inn utførte oppgaver, men ikke godkjenne eller endre beløp
 - Voksne kan opprette oppgaver, invitere barn, godkjenne og registrere betaling

@@ -73,19 +73,58 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false)
   const claimingInvite = useRef(false)
 
-  const hasInviteInUrl = new URLSearchParams(window.location.search).has('invite')
-
   useEffect(() => {
     if (!isSupabaseConfigured) return
 
     const client = getSupabase()
     let active = true
 
-    void client.auth.getSession().then(({ data }) => {
+    void (async () => {
+      let currentSession = (await client.auth.getSession()).data.session
+      const inviteToken = new URLSearchParams(window.location.search).get('invite')?.trim()
+
+      if (inviteToken) {
+        claimingInvite.current = true
+        let createdAnonymousSession = false
+
+        try {
+          if (currentSession && !currentSession.user.is_anonymous) {
+            throw new Error('Logg ut av voksenkontoen før du bruker en barneinvitasjon.')
+          }
+
+          if (!currentSession) {
+            const { data, error } = await client.auth.signInAnonymously()
+            if (error) throw error
+            currentSession = data.session
+            createdAnonymousSession = true
+          }
+
+          if (!currentSession) throw new Error('Kunne ikke opprette en sikker barneinnlogging.')
+
+          const { error } = await client.rpc('claim_child_invite', { p_token: inviteToken })
+          if (error) throw error
+
+          await persistStorage()
+          window.history.replaceState({}, '', window.location.pathname)
+          setNotice('Denne enheten er koblet til barneprofilen.')
+        } catch (error) {
+          if (createdAnonymousSession) {
+            await client.auth.signOut({ scope: 'local' })
+            currentSession = null
+          }
+          window.history.replaceState({}, '', window.location.pathname)
+          setInviteValue(window.location.href)
+          setMode('invite')
+          setNotice(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)
+        } finally {
+          claimingInvite.current = false
+        }
+      }
+
       if (!active) return
-      setSession(data.session)
+      setSession(currentSession)
       setReady(true)
-    })
+    })()
 
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return
@@ -185,7 +224,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       setSession(currentSession)
       setNotice('Denne enheten er koblet til barneprofilen.')
     } catch (error) {
-      if (createdAnonymousSession) await client.auth.signOut()
+      if (createdAnonymousSession) await client.auth.signOut({ scope: 'local' })
       setNotice(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)
     } finally {
       claimingInvite.current = false
@@ -193,7 +232,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     }
   }
 
-  if (!isSupabaseConfigured || hasInviteInUrl || session) return children
+  if (!isSupabaseConfigured || session) return children
   if (!ready) return <LoadingGate />
 
   if (mode === 'email-code') {

@@ -10,7 +10,7 @@ npx supabase db push
 
 I Supabase Dashboard under **Authentication → Providers → Anonymous Sign-Ins**, aktiver anonyme innlogginger. De brukes bare når et barn åpner eller limer inn en engangslenke som en voksen har opprettet.
 
-Migreringen `202608030001_fix_ios_auth_and_child_invites.sql` legger `extensions` inn i søkeveien til invitasjonsfunksjonene. Det gjør Supabase-funksjonene `gen_random_bytes` og `digest` tilgjengelige når en invitasjon opprettes eller brukes.
+Migreringen `202608030001_fix_ios_auth_and_child_invites.sql` legger `extensions` inn i søkeveien til invitasjonsfunksjonene. Det gjør Supabase-funksjonene `gen_random_bytes` og `digest` tilgjengelige når en invitasjon opprettes eller brukes. Migreringen `202608050001_child_profile_reconnect.sql` lar en voksen koble en eksisterende barneprofil til en ny enhet uten å slette profil eller historikk.
 
 ## 2. Konfigurer e-postkode for voksne
 
