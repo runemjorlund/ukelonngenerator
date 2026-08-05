@@ -3,8 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 function normalizeSupabaseUrl(value?: string) {
   const normalized = value?.trim().replace(/\/+$/, '')
 
-  // Supabase project URLs end in .supabase.co. Correct the common .com typo
-  // so an old or mistyped deployment variable cannot break authentication.
+  // Supabase-prosjektadresser slutter på .supabase.co. Retter den vanlige .com-feilen.
   return normalized?.replace(/\.supabase\.com$/i, '.supabase.co')
 }
 
@@ -24,9 +23,6 @@ export const supabase = isSupabaseConfigured
   : null
 
 export function getSupabase() {
-  if (!supabase) {
-    throw new Error('Supabase er ikke konfigurert.')
-  }
-
+  if (!supabase) throw new Error('Supabase er ikke konfigurert.')
   return supabase
 }
