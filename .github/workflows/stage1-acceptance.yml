@@ -125,6 +125,7 @@ jobs:
           from public.submissions
           where task_id = (select id from public.tasks where title = 'Rydde stua')
             and status = 'avvist';
+          grant select on rejected_snapshot to authenticated;
 
           select set_config(
             'request.jwt.claims',
