@@ -112,8 +112,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             await client.auth.signOut({ scope: 'local' })
             currentSession = null
           }
+          const failedInviteUrl = window.location.href
           window.history.replaceState({}, '', window.location.pathname)
-          setInviteValue(window.location.href)
+          setInviteValue(failedInviteUrl)
           setMode('invite')
           setNotice(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)
         } finally {
