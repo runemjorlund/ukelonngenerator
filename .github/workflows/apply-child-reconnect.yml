@@ -1,4 +1,4 @@
-name: Apply child reconnect implementation
+name: Finalize child reconnect implementation
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  apply:
+  finalize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,139 +17,32 @@ jobs:
           ref: fix/child-profile-reconnect
           fetch-depth: 0
 
-      - name: Apply focused source changes
+      - name: Preserve failed invitation input and remove temporary workflow
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              file = Path(path)
-              text = file.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{path}: expected one match, found {count}')
-              file.write_text(text.replace(old, new, 1))
-
-          replace_once(
-              'src/App.tsx',
-              "    <AppShell family={family} member={member} notice={notice} onSignOut={() => void getSupabase().auth.signOut()}>",
-              "    <AppShell family={family} member={member} notice={notice} onSignOut={() => void getSupabase().auth.signOut({ scope: 'local' })}>",
-          )
-
-          replace_once(
-              'src/App.tsx',
-              "          <button className=\"icon-button\" onClick={onSignOut} aria-label=\"Logg ut\"><LogOut size={18} /></button>",
-              "          {member.role === 'administrator' && <button className=\"icon-button\" onClick={onSignOut} aria-label=\"Logg ut\"><LogOut size={18} /></button>}",
-          )
-
-          replace_once(
-              'src/App.tsx',
-              "  const [inviteUrl, setInviteUrl] = useState('')\n  const [pushBusy, setPushBusy] = useState(false)",
-              "  const [inviteUrl, setInviteUrl] = useState('')\n  const [reconnectBusyId, setReconnectBusyId] = useState('')\n  const [pushBusy, setPushBusy] = useState(false)",
-          )
-
-          replace_once(
-              'src/App.tsx',
-              "  const copyInvite = async () => {\n    await navigator.clipboard.writeText(inviteUrl)\n    onNotice('Invitasjonslenken er kopiert.')\n  }\n\n  const updateSchedule",
-              "  const copyInvite = async () => {\n    await navigator.clipboard.writeText(inviteUrl)\n    onNotice('Invitasjonslenken er kopiert.')\n  }\n\n  const reconnectChild = async (child: Member) => {\n    const action = child.auth_user_id ? 'koble fra den gamle enheten og lage en ny lenke' : 'lage en ny lenke'\n    if (!window.confirm(`Vil du ${action} for ${child.display_name}? Oppgavehistorikken blir beholdt.`)) return\n\n    setReconnectBusyId(child.id)\n    const { data, error } = await getSupabase().rpc('create_child_reconnect_invite', {\n      p_member_id: child.id,\n    })\n    setReconnectBusyId('')\n\n    if (error) return onNotice(error.message)\n    const result = Array.isArray(data) ? data[0] : data\n    const token = result?.invite_token as string | undefined\n    if (!token) return onNotice('Invitasjonen ble opprettet uten en gyldig lenke.')\n\n    const url = new URL(window.location.origin)\n    url.searchParams.set('invite', token)\n    setInviteUrl(url.toString())\n    onNotice(`Ny invitasjon til ${child.display_name} er klar. Den gamle enheten er koblet fra.`)\n    refresh()\n  }\n\n  const updateSchedule",
-          )
-
-          replace_once(
-              'src/App.tsx',
-              "          <div className=\"member-list\">{children.map((child) => <div key={child.id}><span className=\"avatar\" style={{ background: child.profile_color }}>{child.emoji}</span><strong>{child.display_name}</strong><small>{child.auth_user_id ? 'Enhet koblet til' : 'Venter på invitasjon'}</small></div>)}</div>",
-              "          <div className=\"member-list\">{children.map((child) => <div key={child.id}><span className=\"avatar\" style={{ background: child.profile_color }}>{child.emoji}</span><div><strong>{child.display_name}</strong><small>{child.auth_user_id ? 'Enhet koblet til' : 'Venter på invitasjon'}</small></div><button className=\"secondary-button reconnect-button\" disabled={reconnectBusyId === child.id} onClick={() => void reconnectChild(child)}>{reconnectBusyId === child.id ? 'Lager lenke…' : child.auth_user_id ? 'Koble til på nytt' : 'Lag ny lenke'}</button></div>)}</div>",
-          )
-
-          replace_once(
-              'src/App.css',
-              ".mini-list small, .member-list small { margin-top: 2px; color: var(--muted); font-size: .72rem; }",
-              ".mini-list small, .member-list small { margin-top: 2px; color: var(--muted); font-size: .72rem; }\n.reconnect-button { min-height: 36px; padding-inline: 11px; font-size: .72rem; white-space: nowrap; }",
-          )
-
-          replace_once(
-              'src/AuthGate.tsx',
-              "  const hasInviteInUrl = new URLSearchParams(window.location.search).has('invite')\n\n",
-              "",
-          )
-
-          replace_once(
-              'src/AuthGate.tsx',
-              "    void client.auth.getSession().then(({ data }) => {\n      if (!active) return\n      setSession(data.session)\n      setReady(true)\n    })",
-              "    void (async () => {\n      let currentSession = (await client.auth.getSession()).data.session\n      const inviteToken = new URLSearchParams(window.location.search).get('invite')?.trim()\n\n      if (inviteToken) {\n        claimingInvite.current = true\n        let createdAnonymousSession = false\n\n        try {\n          if (currentSession && !currentSession.user.is_anonymous) {\n            throw new Error('Logg ut av voksenkontoen før du bruker en barneinvitasjon.')\n          }\n\n          if (!currentSession) {\n            const { data, error } = await client.auth.signInAnonymously()\n            if (error) throw error\n            currentSession = data.session\n            createdAnonymousSession = true\n          }\n\n          if (!currentSession) throw new Error('Kunne ikke opprette en sikker barneinnlogging.')\n\n          const { error } = await client.rpc('claim_child_invite', { p_token: inviteToken })\n          if (error) throw error\n\n          await persistStorage()\n          window.history.replaceState({}, '', window.location.pathname)\n          setNotice('Denne enheten er koblet til barneprofilen.')\n        } catch (error) {\n          if (createdAnonymousSession) {\n            await client.auth.signOut({ scope: 'local' })\n            currentSession = null\n          }\n          window.history.replaceState({}, '', window.location.pathname)\n          setInviteValue(window.location.href)\n          setMode('invite')\n          setNotice(`Invitasjonen kunne ikke brukes: ${errorMessage(error)}`)\n        } finally {\n          claimingInvite.current = false\n        }\n      }\n\n      if (!active) return\n      setSession(currentSession)\n      setReady(true)\n    })()",
-          )
-
-          replace_once(
-              'src/AuthGate.tsx',
-              "      if (createdAnonymousSession) await client.auth.signOut()",
-              "      if (createdAnonymousSession) await client.auth.signOut({ scope: 'local' })",
-          )
-
-          replace_once(
-              'src/AuthGate.tsx',
-              "  if (!isSupabaseConfigured || hasInviteInUrl || session) return children",
-              "  if (!isSupabaseConfigured || session) return children",
-          )
-
-          migration = Path('supabase/migrations/202608050001_child_profile_reconnect.sql')
-          migration.write_text("""create or replace function public.create_child_reconnect_invite(p_member_id uuid)
-          returns table(member_id uuid, invite_token text)
-          language plpgsql
-          security definer
-          set search_path = extensions, public, pg_temp
-          as $$
-          declare
-            v_family_id uuid := public.current_family_id();
-            v_token text := encode(gen_random_bytes(24), 'hex');
-            v_member_id uuid;
-          begin
-            if public.current_family_role() <> 'administrator' then
-              raise exception 'Bare voksne kan koble til et barn på nytt';
-            end if;
-
-            select id
-            into v_member_id
-            from public.family_members
-            where id = p_member_id
-              and family_id = v_family_id
-              and role = 'barn'
-            for update;
-
-            if v_member_id is null then
-              raise exception 'Barneprofilen finnes ikke i denne familien';
-            end if;
-
-            update public.family_members
-            set auth_user_id = null,
-                invite_token_hash = encode(digest(v_token, 'sha256'), 'hex')
-            where id = v_member_id;
-
-            return query select v_member_id, v_token;
-          end;
-          $$;
-
-          revoke all on function public.create_child_reconnect_invite(uuid) from public;
-          grant execute on function public.create_child_reconnect_invite(uuid) to authenticated;
-          """.replace('          ', ''))
-
-          replace_once(
-              'supabase/README.md',
-              "Migreringen `202608030001_fix_ios_auth_and_child_invites.sql` legger `extensions` inn i søkeveien til invitasjonsfunksjonene. Det gjør Supabase-funksjonene `gen_random_bytes` og `digest` tilgjengelige når en invitasjon opprettes eller brukes.",
-              "Migreringen `202608030001_fix_ios_auth_and_child_invites.sql` legger `extensions` inn i søkeveien til invitasjonsfunksjonene. Det gjør Supabase-funksjonene `gen_random_bytes` og `digest` tilgjengelige når en invitasjon opprettes eller brukes. Migreringen `202608050001_child_profile_reconnect.sql` lar en voksen koble en eksisterende barneprofil til en ny enhet uten å slette profil eller historikk.",
-          )
-
-          replace_once(
-              'README.md',
-              "- Barn kobler sin enhet til en barneprofil med en engangslenke",
-              "- Barn kobler sin enhet til en barneprofil med en engangslenke\n- Voksne kan koble en eksisterende barneprofil til en ny enhet uten å miste historikk",
-          )
+          path = Path('src/AuthGate.tsx')
+          text = path.read_text()
+          old = """          window.history.replaceState({}, '', window.location.pathname)
+          setInviteValue(window.location.href)
+          setMode('invite')
+"""
+          new = """          const failedInviteUrl = window.location.href
+          window.history.replaceState({}, '', window.location.pathname)
+          setInviteValue(failedInviteUrl)
+          setMode('invite')
+"""
+          if text.count(old) != 1:
+              raise SystemExit('AuthGate.tsx: failed invitation block not found exactly once')
+          path.write_text(text.replace(old, new, 1))
           PY
 
-      - name: Commit implementation
-        shell: bash
-        run: |
+          rm .github/workflows/apply-child-reconnect.yml
+
           git config user.name "OpenAI Codex"
           git config user.email "codex@openai.com"
-          git add -- src/App.tsx src/App.css src/AuthGate.tsx README.md supabase/README.md supabase/migrations/202608050001_child_profile_reconnect.sql
-          git commit -m "fix: reconnect existing child profiles safely"
+          git add -- src/AuthGate.tsx .github/workflows/apply-child-reconnect.yml
+          git commit -m "fix: preserve failed child invitation for retry"
           git push origin HEAD:fix/child-profile-reconnect
