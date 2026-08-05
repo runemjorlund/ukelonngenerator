@@ -1,0 +1,35 @@
+name: Stage 0 acceptance
+
+on:
+  push:
+    branches:
+      - stage-0-repo-hygiene
+    paths:
+      - .github/workflows/stage0-acceptance.yml
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage-0-repo-hygiene
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Kontroller lint-tid og resultat
+        run: |
+          start=$(date +%s%N)
+          npm run lint
+          end=$(date +%s%N)
+          elapsed_ms=$(( (end - start) / 1000000 ))
+          echo "Lint tok ${elapsed_ms} ms"
+          test "$elapsed_ms" -lt 2000
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Kontroller ren arbeidskopi
+        run: test -z "$(git status --porcelain)"
+      - name: Kontroller Apple-ikon
+        run: test -f public/apple-touch-icon.png
