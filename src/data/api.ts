@@ -17,6 +17,18 @@ function firstInviteResult(data: unknown): InviteResult | null {
   return candidate as InviteResult
 }
 
+async function invokeAccountDeletion(body: {
+  mode: 'member' | 'family'
+  member_id?: string
+}) {
+  const { data, error } = await getSupabase().functions.invoke('slett-konto', { body })
+  if (error) throw error
+  if (data && typeof data === 'object' && 'error' in data) {
+    throw new Error(String((data as { error: unknown }).error))
+  }
+  return data
+}
+
 export async function loadFamilyRoom(userId: string): Promise<FamilyRoom> {
   const client = getSupabase()
   const { data: profile, error: profileError } = await client
@@ -225,13 +237,11 @@ export async function createPayout(childMemberId: string) {
 }
 
 export async function deleteMemberProfile(memberId: string) {
-  const { error } = await getSupabase().rpc('delete_member', { p_member_id: memberId })
-  if (error) throw error
+  return invokeAccountDeletion({ mode: 'member', member_id: memberId })
 }
 
 export async function deleteFamilyData() {
-  const { error } = await getSupabase().rpc('delete_family')
-  if (error) throw error
+  return invokeAccountDeletion({ mode: 'family' })
 }
 
 export async function submitTask(task: Task, member: Member) {

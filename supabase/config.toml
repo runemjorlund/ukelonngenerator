@@ -2,3 +2,9 @@ project_id = "ukelonngenerator"
 
 [functions.send-push]
 verify_jwt = false
+
+[functions.slett-konto]
+verify_jwt = false
+
+[functions.rydd-anonyme-brukere]
+verify_jwt = false
