@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, TouchEvent } from 'react'
 import { LogOut, RefreshCw, Sparkles } from 'lucide-react'
 import type { Family, Member } from '../data/types'
@@ -7,6 +7,7 @@ import './AppShell.css'
 const pullThreshold = 72
 const maxPullDistance = 112
 const pullResistance = 0.55
+const signOutConfirmationId = 'sign-out-confirmation'
 
 function pageIsAtTop() {
   return window.scrollY <= 0 && (document.scrollingElement?.scrollTop ?? 0) <= 0
@@ -32,8 +33,12 @@ export function AppShell({
   children: ReactNode
 }) {
   const [pullDistance, setPullDistance] = useState(0)
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const pullStartY = useRef<number | null>(null)
   const pullDistanceRef = useRef(0)
+  const signOutControlRef = useRef<HTMLDivElement | null>(null)
+  const signOutTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const cancelSignOutRef = useRef<HTMLButtonElement | null>(null)
 
   const updatePullDistance = (nextDistance: number) => {
     pullDistanceRef.current = nextDistance
@@ -49,6 +54,44 @@ export function AppShell({
     if (refreshDisabled) return
     void onRefresh()
   }
+
+  const cancelSignOut = () => {
+    setConfirmingSignOut(false)
+    window.requestAnimationFrame(() => signOutTriggerRef.current?.focus())
+  }
+
+  const confirmSignOut = () => {
+    setConfirmingSignOut(false)
+    onSignOut()
+  }
+
+  useEffect(() => {
+    if (!confirmingSignOut) return
+
+    const focusFrame = window.requestAnimationFrame(() => cancelSignOutRef.current?.focus())
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!signOutControlRef.current?.contains(event.target as Node)) {
+        setConfirmingSignOut(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setConfirmingSignOut(false)
+      window.requestAnimationFrame(() => signOutTriggerRef.current?.focus())
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [confirmingSignOut])
 
   const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     const touch = event.touches.item(0)
@@ -109,8 +152,9 @@ export function AppShell({
             <strong>{member.display_name}</strong>
             <small>{member.role === 'administrator' ? 'Voksen' : 'Barn'}</small>
           </div>
-          <span className="account-actions">
+          <div className="account-actions">
             <button
+              type="button"
               className={`icon-button refresh-button${refreshing ? ' is-refreshing' : ''}`}
               onClick={requestRefresh}
               disabled={refreshDisabled}
@@ -120,11 +164,54 @@ export function AppShell({
               <RefreshCw size={18} />
             </button>
             {member.role === 'administrator' && (
-              <button className="icon-button" onClick={onSignOut} aria-label="Logg ut">
-                <LogOut size={18} />
-              </button>
+              <div className="sign-out-control" ref={signOutControlRef}>
+                <button
+                  ref={signOutTriggerRef}
+                  type="button"
+                  className={`icon-button sign-out-button${confirmingSignOut ? ' is-active' : ''}`}
+                  onClick={() => setConfirmingSignOut((current) => !current)}
+                  aria-label={confirmingSignOut ? 'Lukk bekreftelse for utlogging' : 'Logg ut'}
+                  aria-haspopup="dialog"
+                  aria-expanded={confirmingSignOut}
+                  aria-controls={signOutConfirmationId}
+                  title="Logg ut"
+                >
+                  <LogOut size={18} />
+                </button>
+                {confirmingSignOut && (
+                  <div
+                    id={signOutConfirmationId}
+                    className="sign-out-confirmation"
+                    role="dialog"
+                    aria-modal="false"
+                    aria-labelledby={`${signOutConfirmationId}-title`}
+                  >
+                    <strong id={`${signOutConfirmationId}-title`}>
+                      Er du sikker på at du vil logge ut?
+                    </strong>
+                    <span>Du kan logge inn igjen med en ny kode fra e-post.</span>
+                    <div className="sign-out-confirmation-actions">
+                      <button
+                        ref={cancelSignOutRef}
+                        type="button"
+                        className="sign-out-cancel-button"
+                        onClick={cancelSignOut}
+                      >
+                        Avbryt
+                      </button>
+                      <button
+                        type="button"
+                        className="sign-out-confirm-button"
+                        onClick={confirmSignOut}
+                      >
+                        Ja, logg ut
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-          </span>
+          </div>
         </div>
       </header>
 
