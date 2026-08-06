@@ -4,7 +4,7 @@
 
 @media (max-width: 470px) {
   .notification-settings.push-notification-settings {
-    grid-template-columns: minmax(0, 1.25fr) minmax(112px, .75fr);
+    grid-template-columns: minmax(0, 1.25fr) minmax(112px, 0.75fr);
   }
 
   .notification-settings.push-notification-settings button {
