@@ -27,6 +27,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [manualRefreshing, setManualRefreshing] = useState(false)
   const [member, setMember] = useState<Member | null>(null)
   const [family, setFamily] = useState<Family | null>(null)
   const [members, setMembers] = useState<Member[]>([])
@@ -45,7 +46,7 @@ function App() {
   }, [])
 
   const refresh = useCallback(async (userId = session?.user.id) => {
-    if (!userId || !isSupabaseConfigured) return
+    if (!userId || !isSupabaseConfigured) return false
     setLoading(true)
     try {
       const room = await loadFamilyRoom(userId)
@@ -55,12 +56,25 @@ function App() {
       setTasks(room.tasks)
       setSubmissions(room.submissions)
       setPayouts(room.payouts)
+      return true
     } catch (error) {
       setNotice(errorMessage(error))
+      return false
     } finally {
       setLoading(false)
     }
   }, [session?.user.id])
+
+  const refreshManually = useCallback(async () => {
+    if (loading || manualRefreshing) return
+    setManualRefreshing(true)
+    try {
+      const updated = await refresh()
+      if (updated) setNotice('Oppdatert med de nyeste dataene.')
+    } finally {
+      setManualRefreshing(false)
+    }
+  }, [loading, manualRefreshing, refresh])
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -141,6 +155,9 @@ function App() {
       family={family}
       member={member}
       notice={notice}
+      refreshing={manualRefreshing}
+      refreshDisabled={loading || manualRefreshing}
+      onRefresh={refreshManually}
       onSignOut={() => void signOut()}
     >
       {member.role === 'administrator' ? (
