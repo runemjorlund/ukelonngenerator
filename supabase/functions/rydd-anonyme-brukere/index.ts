@@ -43,9 +43,10 @@ Deno.serve(async (request) => {
     })
     if (error) throw error
 
-    const userIds = (data ?? [])
+    const rpcValues: unknown[] = Array.isArray(data) ? data : []
+    const userIds = rpcValues
       .map(userIdFromRpcValue)
-      .filter((value): value is string => Boolean(value))
+      .filter((value): value is string => value !== null)
 
     let deleted = 0
     let failed = 0
