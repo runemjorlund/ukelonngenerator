@@ -1,0 +1,86 @@
+.app-shell {
+  overscroll-behavior-y: contain;
+}
+
+.account-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refresh-button svg {
+  transition: transform .18s ease;
+}
+
+.refresh-button.is-refreshing svg,
+.pull-refresh-indicator.is-refreshing svg {
+  animation: refresh-rotate .8s linear infinite;
+}
+
+.pull-refresh-indicator {
+  position: fixed;
+  z-index: 19;
+  top: 76px;
+  left: 50%;
+  min-height: 38px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+  border: 1px solid rgba(20,64,107,.16);
+  border-radius: 999px;
+  color: var(--blue);
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 10px 28px rgba(20,64,107,.16);
+  font-size: .75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: transform .16s ease, opacity .16s ease;
+}
+
+.pull-refresh-indicator.is-ready {
+  border-color: rgba(98,169,93,.28);
+  color: var(--green);
+  background: rgba(248,255,247,.97);
+}
+
+.pull-refresh-indicator svg {
+  flex: none;
+  transition: transform .1s linear;
+}
+
+.app-content {
+  transition: transform .18s ease;
+  will-change: transform;
+}
+
+.app-content.is-pulling {
+  transition: none;
+}
+
+@keyframes refresh-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 470px) {
+  .account-actions { gap: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-button svg,
+  .pull-refresh-indicator,
+  .pull-refresh-indicator svg,
+  .app-content {
+    transition: none;
+  }
+
+  .refresh-button.is-refreshing svg,
+  .pull-refresh-indicator.is-refreshing svg {
+    animation: none;
+  }
+
+  .pull-refresh-indicator svg {
+    transform: none !important;
+  }
+}
