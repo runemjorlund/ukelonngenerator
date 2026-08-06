@@ -150,6 +150,12 @@
   to { transform: rotate(360deg); }
 }
 
+@media (max-width: 760px) {
+  .account > .account-actions {
+    display: inline-flex;
+  }
+}
+
 @media (max-width: 470px) {
   .account-actions { gap: 4px; }
 
