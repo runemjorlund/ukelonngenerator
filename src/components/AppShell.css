@@ -77,6 +77,10 @@
 
   .refresh-button.is-refreshing svg,
   .pull-refresh-indicator.is-refreshing svg {
-    animation-duration: 1.6s;
+    animation: none;
+  }
+
+  .pull-refresh-indicator svg {
+    transform: none !important;
   }
 }
