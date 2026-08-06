@@ -65,16 +65,20 @@ function App() {
     }
   }, [session?.user.id])
 
+  const [manualRefreshLock] = useState(() => ({ inFlight: false }))
+
   const refreshManually = useCallback(async () => {
-    if (loading || manualRefreshing) return
+    if (loading || manualRefreshLock.inFlight) return
+    manualRefreshLock.inFlight = true
     setManualRefreshing(true)
     try {
       const updated = await refresh()
       if (updated) setNotice('Oppdatert med de nyeste dataene.')
     } finally {
+      manualRefreshLock.inFlight = false
       setManualRefreshing(false)
     }
-  }, [loading, manualRefreshing, refresh])
+  }, [loading, refresh, manualRefreshLock])
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
