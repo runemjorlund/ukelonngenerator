@@ -5,6 +5,7 @@ import { updateNotificationSchedule } from '../../data/api'
 import type { Family } from '../../data/types'
 import { errorMessage } from '../../lib/format'
 import { subscribeToPush } from '../../lib/push'
+import './PushSettings.css'
 
 const WEEKDAYS = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag']
 
@@ -39,7 +40,7 @@ export function PushSettings({ family, refresh, onNotice }: {
 
   return (
     <Section title="Ukentlig pushvarsel" eyebrow="Påminnelse til de voksne">
-      <div className="notification-settings">
+      <div className="notification-settings push-notification-settings">
         <label>
           Dag
           <select
