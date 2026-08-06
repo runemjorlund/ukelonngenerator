@@ -148,7 +148,7 @@ export function AppShell({
         </div>
         <div className="account">
           <span className="avatar" style={{ background: member.profile_color }}>{member.emoji}</span>
-          <div>
+          <div className="account-details">
             <strong>{member.display_name}</strong>
             <small>{member.role === 'administrator' ? 'Voksen' : 'Barn'}</small>
           </div>
